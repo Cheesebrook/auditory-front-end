@@ -70,9 +70,9 @@ catch
     brel = 1; %relative occurance (normalise data)
 end
 try
-    actbands = opt.actbands;
+    binMask = opt.binMask;
 catch
-    actbands = 1:size(binCue,2); %considering only activated bands
+    binMask = ones(size(binCue)); %considering only activated time-frequency-units
 end
 try
     ymax = opt.ymax;
@@ -85,14 +85,14 @@ end
 
 %Implementation
 %% Nhist
-%Dimensions of the binCue: Nframes x Nchan
+% Dimensions of the binCue: Nframes x Nchan
 Nframes = size(binCue,1);
 Nchan = size(binCue,2);
 
-%vector for histc.m
+% vector for histc.m
 y = linspace(-ymax,ymax,nbins);
 
-%absolute maxium of the distribution
+% absolute maxium of the distribution
 binCueMax = max(max(abs(binCue)));
 disp('- binCueHistc.m -')
 disp(['Maximum value of distribution: ' num2str(binCueMax)])
@@ -101,23 +101,23 @@ if ymax < binCueMax
     disp(['Histogram is truncated to ''ymax'' = ' num2str(ymax)])
 end
     
-%init 
-Nhist = NaN(nbins,Nchan);
+% Use histc to put distribution into containers specified in y
+Nhist = histc(binCue,y);
+Nhist(Nhist==0) = nan;
 
-%consider only activated bands
-Nchanact = size(actbands,2); %number of activated channels, used to normalise gravity plot
-binCue = binCue(:,actbands); %consider just activated bands
+% consider only activated frames
+Nactframes = sum(~isnan(binCue),1); %vector with number of active frames per frequency-channel
 
-%Use histc to put distribution into containers specified in y
-Nhist(:,actbands) = histc(binCue,y);
-
-if(brel) %relative occurance: normalise to Nframes (each channel contains counts of all frames)
-    Nhist = Nhist/Nframes;
+% relative occurance: normalise to Nactframes (each channel contains counts of all active frames in that channel)
+if(brel) 
+    Nhist = Nhist./repmat(Nactframes,nbins,1);
+%     Nhist = Nhist./Nframes;
+    Nhist(Nhist==0) = nan;
 end
 
 
 %% gravity
-gravityFctAvFirst = sum(Nhist,2)/Nchanact; %sum distributions of all frequency channels and normalise to all active channels
+gravityFctAvFirst = nansum(Nhist,2)'./Nchan; %sum distributions of all frequency channels and normalise to sum of all active frames
 gravityAvFirst = calcDistrWidth(gravityFctAvFirst,wdMethod,percent); %calculate width of gravity function
 
 gravityFctWdthFirst = calcDistrWidth(Nhist,wdMethod,percent); %calculate width of each channel of histogram

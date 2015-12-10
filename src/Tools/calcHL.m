@@ -33,7 +33,7 @@
 % - 23. October 2015
 % --------------------------
 
-function [out_l, out_r, totEn ,actbands, freqWeights, binMask] = ...,
+function [out_l, out_r, totEn, binMask, freqWeights] = ...,
          calcHL(in_l,in_r,method,cfHz,FsHzIn,bframebased,enTh,hl_wname,hl_wSizeSec,hl_hSizeSec)
 
 %% Check Inputs
@@ -65,6 +65,10 @@ if nargin<10|| isempty(hl_hSizeSec)
     hl_hSizeSec = 10E-3; %Window step size (s)
 end
 
+if ~bframebased&&strcmp(method,'binmask')
+    error(['The binary mask method can obiously only be applied ',...
+        'for frame-based processing! Set bframebased to ''true''!'])
+end
 
 % get dimensions of input
 [nSamples,nChannels] = size(in_l);
@@ -79,13 +83,13 @@ nFrames = floor((nSamples-(wSize-hSize))/hSize);
 
 % Compute HL:
 
-% init SPL calculations
-frame_l_rms = zeros(nFrames,nChannels);
-frame_r_rms = zeros(nFrames,nChannels);
-
 % Pre-allocate outputs
 out_l = NaN(nSamples,nChannels);
 out_r = NaN(nSamples,nChannels);
+
+% init SPL calculations
+frame_l_rms = zeros(nFrames,nChannels);
+frame_r_rms = zeros(nFrames,nChannels);
 
 % Window processing
 winRep = repmat(win,1,nChannels);
@@ -136,9 +140,6 @@ freqWeights(freqWeights<0) = 0; %set negative weights (due to subthreshold) to z
 % calculate active frequency bands
 switch method
     case 'none'
-        %actbands: all channels active
-        actbands = (1:length(cfHz)); %column-vector with #filters
-        
         %binary mask: all time-frequency-units active
         binMask = ones(nFrames,nChannels);
         
@@ -149,17 +150,10 @@ switch method
         %all filters that are above absolute threshold of hearing
         bpassth = max_lr_SPL>ath; %bool
         
-        %active bands
-        actbands = (1:length(cfHz)); %column-vector with #filters
-        actbands = actbands(bpassth); %select activated channels from the vector
-        
         %binary mask: all time-frequency-units active
-        binMask = ones(nFrames,nChannels);
+        binMask = repmat(bpassth,nFrames,1);
         
     case 'binmask'
-        %actbands: all channels active
-        actbands = (1:length(cfHz)); %column-vector with #filters
-        
         %absolute threshold of hearing
         ath = calcATH(cfHz*1e-3); 
         
@@ -184,8 +178,15 @@ switch method
         error(['The method ' pObj.Method ' is not defined!'])
 end
 
-% Set all frames to 0 that are below the specified threshold
-out_l(:,actbands) = in_l(:,actbands);
-out_r(:,actbands) = in_r(:,actbands);
+% Set all samples to 0 that are below the specified threshold
+for ii = 1:nFrames
+    % Get start and end indexes for the current frame
+    n_start = (ii-1)*hSize+1;
+    n_end = (ii-1)*hSize+wSize;
+    ncurrSamples = n_end-n_start+1;
+    
+    out_l(n_start:n_end,:) = winRep.*in_l(n_start:n_end,:).*repmat(binMask(ii,:),ncurrSamples,1);
+    out_r(n_start:n_end,:) = winRep.*in_r(n_start:n_end,:).*repmat(binMask(ii,:),ncurrSamples,1);
+end
 
 %EOF

@@ -111,10 +111,10 @@ end
 
 if nargin<2||isempty(gravityFunction) 
     % consider only activated bands
-    [~, Nchanact] = getActBands(Nhist(:,cfSel));
+    [~, Nactframes] = getBinMask(Nhist(:,cfSel));
     
     %generate gravity Function
-    gravityFunction = nansum(Nhist(:,cfSel),2)/Nchanact;
+    gravityFunction = nansum(Nhist(:,cfSel),2)/length(cfSel); %sum distributions of all frequency channels and normalise to sum of all active frames
 end
 
 if length(labels)<3
@@ -127,15 +127,12 @@ end
 
 %% Plots
 
-%select frequency channels
-Nhist = Nhist(:,cfSel);
-
 %number of containers 'nbins' and frequency channels 'Nchan'
 nbins = size(Nhist,1);
-Nchan = size(Nhist,2);
 
 %x and y coordinate
-x = 1:Nchan;
+% x = 1:Nchan;
+x = cfSel(1):cfSel(end);
 y = linspace(-ymaxbin,ymaxbin,nbins);
 
 figure
@@ -145,11 +142,11 @@ end
 switch method
     case 'SURF'
         [Xmesh, Ymesh] = meshgrid(x,y); %meshgrid
-        surf(Xmesh,Ymesh,Nhist);
+        surf(Xmesh,Ymesh,Nhist(:,cfSel));
         zlabel(labels{3},'FontSize',PLOT.fsztxt)
         plotone = gca;
     case 'IMAGE'
-        imagesc(x,y,Nhist,clim);
+        imagesc(x,y,Nhist(:,cfSel),clim);
         colormap('bone')
         colormap(flipud(colormap))
         if color_flag
@@ -172,7 +169,7 @@ if ~bgravity
 end
 
 %axes
-xlim([1 Nchan])
+xlim([cfSel(1) cfSel(end)])
 ylim([-ymaxplot ymaxplot])
 if brel
     zlim(clim)
