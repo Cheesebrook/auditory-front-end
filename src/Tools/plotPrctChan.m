@@ -79,6 +79,11 @@ catch
     choosePrct = 1:size(prctChan,1);
 end
 try
+    save_plot = r.save_plot; %bool: save plots(1)
+catch
+    save_plot = 0;
+end
+try
     PLOT = r.PLOT;
 catch
     load S %common plot settings
@@ -167,6 +172,13 @@ end
 
 view(90,90)
 set(gca,'ygrid','on','xdir','reverse')
+
+if save_plot
+    filename = PLOT.filename;
+    %             print(gcf,'-dpng',filename)
+    print(gcf,'-depsc',filename)
+    disp(['Plot saved as ' filename])
+end
 
 end
 %EOF

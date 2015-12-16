@@ -103,6 +103,11 @@ catch
     bmarkcfSel = 0;
 end
 try
+    save_plot = r.save_plot; %bool: save plots(1)
+catch
+    save_plot = 0;
+end
+try
     PLOT = r.PLOT;
 catch
     load S %common plot settings
@@ -238,7 +243,7 @@ if bgravity
     set(gca,'FontSize',PLOT.fszax)
 end
 
-if PLOT.save
+if save_plot
     filename = PLOT.filename;
     %             print(gcf,'-dpng',filename)
     print(gcf,'-depsc',filename)
