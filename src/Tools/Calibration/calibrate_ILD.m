@@ -1,4 +1,4 @@
-function calibrate_ILD(fs,winSec,cfHz,bCalibrate)
+function calibrate_ILD(fs,winSec,cfHz,bCalibrate,wdMethod,percent)
 %calibrate_ILD_Subband   Calculate frequency-dependent ILD2azimuth mapping
 %
 %USAGE
@@ -27,6 +27,8 @@ function calibrate_ILD(fs,winSec,cfHz,bCalibrate)
 %   v.0.1   2014/01/22
 %   v.0.2   2014/01/28 added flag to enforce re-calibration 
 %   v.0.3   2015/08/04 unified broadband and subband and adapted for using AFE (RD)
+%           2016/01/22 added estimated ITD fluctuations via specified
+%           wdMethod (as performed in calcASW.m) by Johannes Käsbach (JK)
 %   ***********************************************************************
 
 % Initialize persistent variables
@@ -37,7 +39,7 @@ persistent PERfs PERwinSec PERcfHz
 % 
 % 
 % Check for proper input arguments
-if nargin < 3 || nargin > 4
+if nargin < 3 || nargin > 6
     help(mfilename);
     error('Wrong number of input arguments!')
 end
@@ -45,6 +47,15 @@ end
 % Set default parameter
 if nargin < 4 || isempty(bCalibrate); bCalibrate = false; end
 
+if nargin < 5 || isempty(wdMethod)
+   wdMethod = 'prct';
+end
+
+if nargin < 6 || isempty(percent)
+    percent = [10 30 50 70 90];
+end
+
+wdMethod = 'std';
 
 %% 2. CALIBRATION SETTINGS
 % 
@@ -54,6 +65,7 @@ lengthSec = 1;
 
 % Use anechoic HRTF measurements
 room = 'SURREY_A';
+% room = 'SURREY_ROOM_B';
 
 % Azimuth range of interest (real sound source positions)
 azimRange = (-90:5:90);
@@ -127,6 +139,9 @@ if bRecalibrate
     ild2Azim       = zeros(nAzim,nFilter);
     ild2AzimInterp = zeros(nAzimInterp,nFilter);
     ild2AzimPoly   = zeros(nAzimInterp,nFilter);
+    ild2AzimFluct  = zeros(nAzim,nFilter);
+    ild2AzimFluctInterp = zeros(nAzimInterp,nFilter);
+    ild2AzimFluctPoly   = zeros(nAzimInterp,nFilter);
             
     % Initialize the AFE for subband ILD measurement
     if ~isempty(cfHz)
@@ -159,9 +174,15 @@ if bRecalibrate
         % Estimate ILD
         mObj.processSignal(binaural)
         ildEst = mean(dObj.ild{1}.Data(:),1);
+        
+         % Estimate ILD fluctuation via specified wdMethod
+        ildWidthChan = calcDistrWidth(dObj.ild{1}.Data(:),wdMethod,percent); %calculate width of binCue directly for each frequency channel
 
         % Store azimuth-dependent ILD
         ild2Azim(ii,:) = ildEst;
+        
+        % Store azimuth-dependent ITD fluctuation
+        ild2AzimFluct(ii,:) = ildWidthChan;
         
         % Report progress
         fprintf('\n%s-based ILD2Azimuth calibration: %.2f %%',name,100*ii/nAzim);
@@ -179,6 +200,12 @@ if bRecalibrate
         
         % Ensure that mapping is monotonic by using a polynomial fit
         ild2AzimPoly(:,jj) = polyval(polyfit(azimRangeInterp,ild2AzimInterp(:,jj).',pOrder),azimRangeInterp);
+        
+        % Interpolate to 'rangeAzInterp'
+        ild2AzimFluctInterp(:,jj) = interp1(azimRange,ild2AzimFluct(:,jj),azimRangeInterp);
+        
+        % Ensure that mapping is monotonic by using a polynomial fit
+        ild2AzimFluctPoly(:,jj) = polyval(polyfit(azimRangeInterp,ild2AzimFluctInterp(:,jj).',pOrder),azimRangeInterp);
     end
     
     
@@ -190,6 +217,8 @@ if bRecalibrate
 %    mapping.ild          = dObj.crosscorrelation{1}.lags;
     mapping.ild2azimRaw  = ild2Azim;
     mapping.ild2azim     = ild2AzimPoly;
+    mapping.ild2azimFluctRaw = ild2AzimFluct;
+    mapping.ild2azimFluct = ild2AzimFluctInterp;
     mapping.polyOrder    = pOrder;
     mapping.ildMax       = max(ild2AzimPoly);
     mapping.ildMin       = min(ild2AzimPoly); 

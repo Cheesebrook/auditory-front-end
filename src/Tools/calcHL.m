@@ -189,4 +189,9 @@ for ii = 1:nFrames
     out_r(n_start:n_end,:) = winRep.*in_r(n_start:n_end,:).*repmat(binMask(ii,:),ncurrSamples,1);
 end
 
+% Histogram of thresholded SPL across all frames
+%hist(frame_SPL(binMask))
+% hist(frame_SPL(:))
+% xlabel('SPL'), ylabel('Counts'), title('DS2014')
+
 %EOF

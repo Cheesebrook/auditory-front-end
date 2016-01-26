@@ -70,6 +70,10 @@ classdef ihcProc < Processor
                 case 'bernstein'
                     env = max(abs(hilbert(in)).^(-.77).*in,0).^2;
                     out = pObj.IHCFilter.filter(env);
+                    
+                case 'bernstein_nocomp'
+                    env = max(abs(hilbert(in)).^(0).*in,0).^2;
+                    out = pObj.IHCFilter.filter(env);
 
                 otherwise
                     error('%s: Method ''%s'' is not supported!',upper(mfilename),pObj.IHCMethod)
@@ -108,7 +112,8 @@ classdef ihcProc < Processor
                          'joergensen',...
                          'dau',...
                          'breebart',...
-                         'bernstein'};
+                         'bernstein',...
+                         'bernstein_nocomp'};
              
              if ~ismember(pObj.parameters.map('ihc_method'),validMeth)
                  [~,defaultMethod] = ihcProc.getParameterInfo;
@@ -168,7 +173,7 @@ classdef ihcProc < Processor
             
             descriptions = {['Inner hair-cell envelope extraction method (''none'', ' ...
                             '''halfwave'', ''fullwave'', ''square'', ''hilbert'', '...
-                            '''joergensen'', ''dau'', ''breebart'', ''berstein'')']};
+                            '''joergensen'', ''dau'', ''breebart'', ''berstein'', ''berstein_nocomp'')']};
             
             defaultValues = {'dau'};
                 
@@ -218,6 +223,10 @@ classdef ihcProc < Processor
                          pObj.IHCFilter = bwFilter(pObj.FsHzIn,1,2000,5,[]);
 
                      case 'bernstein'
+                         % Second order butterworth filter @ 425Hz
+                         pObj.IHCFilter = bwFilter(pObj.FsHzIn,2,425);
+                         
+                     case 'bernstein_nocomp'
                          % Second order butterworth filter @ 425Hz
                          pObj.IHCFilter = bwFilter(pObj.FsHzIn,2,425);
 
