@@ -216,9 +216,11 @@ if bRecalibrate
     mapping.azim         = azimRangeInterp;
     mapping.itd          = dObj.crosscorrelation{1}.lags;
     mapping.itd2azimRaw  = itd2Azim;
+    mapping.itd2azimInterp = itd2AzimInterp;
     mapping.itd2azim     = itd2AzimPoly;
     mapping.itd2azimFluctRaw = itd2AzimFluct;
-    mapping.itd2azimFluct = itd2AzimFluctInterp;
+    mapping.itd2azimFluctInterp = itd2AzimFluctInterp;
+    mapping.itd2azimFluct = itd2AzimFluctPoly;
     mapping.polyOrder    = pOrder;
     mapping.itdMax       = max(itd2AzimPoly);
     mapping.itdMin       = min(itd2AzimPoly); 
