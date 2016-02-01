@@ -139,17 +139,27 @@ switch transMethod
         itdReprChan = itdReprChan/itdmax;
         ildReprChan = ildReprChan/ildmax;
         
+    case 'freqnorm'
+        % normalize to the highest possible value from anechoic 
+        % conditions in each band
+        itdload  = load('ITD2Azimuth_Subband.mat');
+        itdmax   = max(abs(itdload.mapping.itd2azim),[],1);
+        itdReprChan = itdReprChan.*repmat(itdmax.^-1,[size(itdReprChan,1),1]);
+        ildload  = load('ILD2Azimuth_Subband.mat');
+        ildmax   = max(abs(ildload.mapping.ild2azim),[],1);
+        ildReprChan = ildReprChan.*repmat(ildmax.^-1,[size(itdReprChan,1),1]);
+        
     case 'latcomp' %lateral compression
         itdReprChan = latCompression(itdReprChan,itdmax);
         ildReprChan = latCompression(ildReprChan,ildmax);
         
-    case 'mapping' %Map boarders (percentiles/std) of ITDs and ILDs to azimuthal angle
+    case 'mapping'  %Map boarders (percentiles/std) of ITDs and ILDs to azimuthal angle
         % init
         Nbounds = size(itdReprChan(:,1),1);
         itd_mapped = zeros(Nbounds,Nchan);
         ild_mapped = zeros(Nbounds,Nchan);
         % angleoffset = -91; %offset to find the correct angle [degree]
-        itdload = load('ITD2Azimuth_Subband.mat');
+        itdload = load('ITD2Azimuth_Subband.matdau');
         itd2azim = itdload.mapping.itd2azim;
         ildload = load('ILD2Azimuth_Subband.mat');
         ild2azim = ildload.mapping.ild2azim;
@@ -198,6 +208,26 @@ switch freqWeighting
         ildReprChan = ildReprChan.*repmat(freqWeights,size(ildReprChan,1),1);
         
 %     case 'timefreqspl'
+    case 'bands';
+        % form matrix with 39 single bands plus 39 accumulated band steps
+        % treat NAN bands
+        Nbands = size(itdReprChan,2);
+        
+%         BandSelect = eye(2*Nbands);
+%         % looking for the most significant: 18,19 plus x
+%         BandSelect([17 18 19],:) = 1; %
+%         % norm
+%         BandSelect = [eye(2*Nbands) BandSelect * diag(1./sum(BandSelect,1))];
+%         imagesc(BandSelect)
+        
+        itdBandSelect = [eye(Nbands) triu(ones(Nbands)')];
+        ildBandSelect = itdBandSelect;
+        imagesc(itdBandSelect)
+
+        % prevent nan results
+        nanBands = find(isnan(itdReprChan(1,:)));
+        itdReprChan(:,nanBands) = 0;
+        ildReprChan(:,nanBands) = 0;
         
     otherwise
         error(['The frequency weighting ' freqWeighting ' is not defined!'])
@@ -229,6 +259,10 @@ switch combMethod
         % choose channels below fcrossHz from itds and above from ilds
         aswReprChan(:,1:fcrossBand) = itdReprChan(:,1:fcrossBand);
         aswReprChan(:,fcrossBand+1:end) = ildReprChan(:,fcrossBand+1:end);
+         
+%         aswReprChan(:,[3]) = itdReprChan(:,[3]);
+%         aswReprChan(:,[18]) = ildReprChan(:,[18]);
+%         aswReprChan(aswReprChan == 0) = nan;
         
         % average all channels
         asw = nanmean(aswReprChan,2);
@@ -244,12 +278,58 @@ switch combMethod
         aswReprChan = zeros(size(itdReprChan));
         
         % choose channels for either dominance
-        aswReprChan(:,bitdDominance) = itdReprChan(:,bitdDominance);
-        aswReprChan(:,~bitdDominance) = ildReprChan(:,~bitdDominance);  
+        aswReprChan(bitdDominance) = itdReprChan(bitdDominance);
+        aswReprChan(~bitdDominance) = ildReprChan(~bitdDominance);  
         
         % average all channels
         asw = nanmean(aswReprChan,2);
         
+    case 'perimeter' % choose the outer bands, as done by Ahrens
+        if strcmp(transMethod,'none')
+            warning('Bin. cues need to be transformed before they can be combined!')
+        end
+        
+        periITD = find(cfHz<200);
+        periILD = find((cfHz>2e3));
+        
+        % init
+        %aswReprChan = zeros(size(itdReprChan));
+        aswReprChan = zeros(size(itdReprChan,1),size([periITD,periILD],2));
+        
+        % choose channels for either dominance
+        aswReprChan(:,periITD)           = itdReprChan(:,periITD); %1:4
+        aswReprChan(:,end-periILD+1:end) = ildReprChan(:,periILD); %5:24
+        
+        % average all channels
+        asw = nanmean(aswReprChan,2);
+    case 'perimeter2' % choose the outer bands, as done by Ahrens
+        if strcmp(transMethod,'none')
+            warning('Bin. cues need to be transformed before they can be combined!')
+        end
+        
+        periITD = find((200<cfHz) & (cfHz<500));
+        periILD = find((4e3<cfHz) & (cfHz<8e3));
+        
+        % init
+        %aswReprChan = zeros(size(itdReprChan));
+        aswReprChan = zeros(size(itdReprChan,1),size([periITD,periILD],2));
+        
+        % choose channels for either dominance
+        aswReprChan(:,1:length(periITD))         = itdReprChan(:,periITD); %1:4
+        aswReprChan(:,end-length(periILD)+1:end) = ildReprChan(:,periILD); %5:24
+        
+        % average all channels
+        asw = nanmean(aswReprChan,2); 
+        
+    case 'successive'
+        if ~strcmp(freqWeighting,'bands')
+            warning('combMethod "successive" expects freqWeighting "bands"')
+        end
+         asw = [itdReprChan*itdBandSelect ildReprChan*ildBandSelect];
+         aswReprChan = asw;
+%         aswReprChan = [itdReprChan ildReprChan]*BandSelect;
+%         asw = [itdReprChan ildReprChan]*BandSelect;
+        asw(asw==0) = nan;
     otherwise
         error(['The combination method ' combMethod ' is not defined!'])
 
