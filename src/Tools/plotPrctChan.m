@@ -114,7 +114,7 @@ x = 1:Nchan;
 figure
 hold on
 for ii = choosePrct
-    plot(x,prctChan(ii,:),'Marker',PLOT.marker{ii},'MarkerSize',PLOT.ms,...
+    plot(x,prctChan(ii,:),'Marker',PLOT.marker2{ii},'MarkerSize',PLOT.ms,...
         'Color',PLOT.colors(ii,:),'LineStyle','none')
 end
 plotone = gca;

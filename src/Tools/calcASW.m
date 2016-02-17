@@ -55,14 +55,14 @@ else
     percent = [10 90];
 end
 if isfield(opt,'itdmax')
-    itdmax = opt.itdmax;
+    itdnormmax = opt.itdmax;
 else
-    itdmax = 1e-3;
+    itdnormmax = 1e-3;
 end
 if isfield(opt,'ildmax')
-    ildmax = opt.ildmax;
+    ildnormmax = opt.ildnormmax;
 else
-    ildmax = 20;
+    ildnormmax = 12;
 end
 if isfield(opt,'chanRepresent')
     chanRepresent = opt.chanRepresent;
@@ -128,6 +128,8 @@ switch chanRepresent
             itdReprChan = itdLR_boarderChan;
             ildReprChan = ildLR_boarderChan;             
         end  
+    otherwise
+        error(['The channel representation method ' chanRepresent ' is not defined!'])
 end
 
 % Transformation of bin. cue
@@ -136,8 +138,8 @@ switch transMethod
         %do nothing
         
     case 'norm' %normalization
-        itdReprChan = itdReprChan/itdmax;
-        ildReprChan = ildReprChan/ildmax;
+        itdReprChan = itdReprChan/itdnormmax;
+        ildReprChan = ildReprChan/ildnormmax;
         
     case 'freqnorm'
         % normalize to the highest possible value from anechoic 
@@ -150,8 +152,8 @@ switch transMethod
         ildReprChan = ildReprChan.*repmat(ildmax.^-1,[size(itdReprChan,1),1]);
         
     case 'latcomp' %lateral compression
-        itdReprChan = latCompression(itdReprChan,itdmax);
-        ildReprChan = latCompression(ildReprChan,ildmax);
+        itdReprChan = latCompression(itdReprChan,itdnormmax);
+        ildReprChan = latCompression(ildReprChan,ildnormmax);
         
     case 'mapping'  %Map boarders (percentiles/std) of ITDs and ILDs to azimuthal angle
         % init
@@ -189,9 +191,17 @@ switch freqWeighting
         itdBandSelect = 1:Nchan;
         ildBandSelect = 1:Nchan;
         
+    case 'highcut' %use all bands besides the last 4 bands 
+        itdBandSelect = 1:Nchan-4;
+        ildBandSelect = 1:Nchan-4;
+        
     case 'itdlow' %lowpass itds, i.e. use itds only at low freqeuncies
         itdBandSelect = 1:19; %lowpass filter cut-off [#frequency band]
         ildBandSelect = 1:Nchan;
+        
+    case 'itdlowhc' %lowpass itds, i.e. use itds only at low freqeuncies
+        itdBandSelect = 1:19; %lowpass filter cut-off [#frequency band]
+        ildBandSelect = 1:Nchan-4;
         
     case 'itdE3' %lowpass itds, i.e. use itds only at low freqeuncies
         itdBandSelect = 7:22; %#frequency bands that correspond to the averaging 
@@ -200,6 +210,22 @@ switch freqWeighting
                         %corresponding to bands 7:12, 11:16 and 17:22,
                         %respectively
         ildBandSelect = 1:Nchan;
+    
+    case 'ildlow' %lowpass itds, i.e. use itds only at low freqeuncies
+        itdBandSelect = 1:Nchan; 
+        ildBandSelect = 1:19; %lowpass filter cut-off [#frequency band]
+        
+    case 'ildhigh' %lowpass itds, i.e. use itds only at low freqeuncies
+        itdBandSelect = 1:Nchan; 
+        ildBandSelect = 20:Nchan; %highpass filter cut-off [#frequency band]
+        
+    case 'ildhighcut' %lowpass itds, i.e. use itds only at low freqeuncies
+        itdBandSelect = 1:Nchan; 
+        ildBandSelect = 20:Nchan-4; %highpass filter cut-off + excluding last 5 bands [#frequency band]
+        
+    case 'ildband' %bandpass of ilds
+        itdBandSelect = 1:Nchan; 
+        ildBandSelect = 6:27; %highpass filter cut-off [#frequency band] (ca. 300 Hz - 5000 Hz)
         
     case 'spl'
         itdBandSelect = 1:Nchan;
@@ -267,19 +293,48 @@ switch combMethod
         % average all channels
         asw = nanmean(aswReprChan,2);
         
+    case 'duplexcut' %combine itd and ild according to duplex theory
+        if strcmp(transMethod,'none')
+            warning('Bin. cues need to be transformed before they can be combined!')
+        end
+        
+        % cross-over frequency in Hz
+        fcrossHz = 1500;
+        % find corresponding channel
+        fcrossBand = interp1(cfHz,1:Nchan,fcrossHz,'next','extrap');
+        
+        % init
+        aswReprChan = zeros(size(itdReprChan));
+        
+        % choose channels below fcrossHz from itds and above from ilds
+        aswReprChan(:,1:fcrossBand) = itdReprChan(:,1:fcrossBand);
+        aswReprChan(:,fcrossBand+1:end) = ildReprChan(:,fcrossBand+1:end);
+         
+%         aswReprChan(:,[3]) = itdReprChan(:,[3]);
+%         aswReprChan(:,[18]) = ildReprChan(:,[18]);
+%         aswReprChan(aswReprChan == 0) = nan;
+        
+        % average all channels
+        asw = nanmean(aswReprChan(:,1:end-4),2);
+        
     case 'dominant' %choose the dominant cue in each channel, i.e. the one with higher variance
         if strcmp(transMethod,'none')
             warning('Bin. cues need to be transformed before they can be combined!')
         end
         
-        bitdDominance = (itdReprChan>ildReprChan);
-        
         % init
         aswReprChan = zeros(size(itdReprChan));
+        itddummy = zeros(size(itdReprChan));
+        ilddummy = zeros(size(ildReprChan));
+        
+        % calculate binary vector of itd dominance
+        itddummy(:,itdBandSelect) = itdReprChan(:,itdBandSelect);
+        ilddummy(:,ildBandSelect) = ildReprChan(:,ildBandSelect);
+        bitdDominance = (abs(itddummy)>abs(ilddummy));
         
         % choose channels for either dominance
-        aswReprChan(bitdDominance) = itdReprChan(bitdDominance);
-        aswReprChan(~bitdDominance) = ildReprChan(~bitdDominance);  
+        aswReprChan(bitdDominance) = itddummy(bitdDominance);
+        aswReprChan(~bitdDominance) = ilddummy(~bitdDominance);  
         
         % average all channels
         asw = nanmean(aswReprChan,2);

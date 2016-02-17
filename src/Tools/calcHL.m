@@ -171,6 +171,17 @@ switch method
         % timeFreqWeights = frame_SPL/max(max(frame_SPL));
         % timeFreqWeights(timeFreqWeights<0) = 0; %set negative weights (due to subthreshold) to zero
         
+        case 'binmask30'
+        %absolute threshold of hearing
+        ath = calcATH(cfHz*1e-3);
+        offset = 30; 
+        
+        % maximal time-frequency-units between left and right channel
+        frame_SPL = max(20*log10(frame_l_rms/xref),20*log10(frame_r_rms/xref));
+        
+        %all filters that are 30 dB above absolute threshold of hearing
+        binMask = frame_SPL>repmat(ath+offset,nFrames,1); %time-frequency binary mask 
+        
     case 'en'
         warning('Energy-based method not implemented yet!')
         
