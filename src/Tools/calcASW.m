@@ -55,14 +55,14 @@ else
     percent = [10 90];
 end
 if isfield(opt,'itdmax')
-    itdnormmax = opt.itdmax;
+    itdmax = opt.itdmax;
 else
-    itdnormmax = 1e-3;
+    itdmax = 1.1e-3;
 end
 if isfield(opt,'ildmax')
-    ildnormmax = opt.ildnormmax;
+    ildmax = opt.ildmax;
 else
-    ildnormmax = 12;
+    ildmax = 30;
 end
 if isfield(opt,'chanRepresent')
     chanRepresent = opt.chanRepresent;
@@ -102,7 +102,60 @@ end
 itd = dObj.itd;
 ild = dObj.ild;
 cfHz = dObj.cfHz;
-Nchan = size(dObj.itd,2);
+[Nframes, Nchan] = size(dObj.itd);
+
+% Transformation of bin. cue
+switch transMethod
+    case 'none' %no transformation
+        %do nothing
+        
+    case 'norm' %normalization
+        itd = itd/itdmax;
+        ild = ild/ildmax;
+    
+    case 'latcomp' %lateral compression
+        itd = latCompression(itd,itdmax);
+        ild = latCompression(ild,ildmax);
+        
+    case 'freqnorm'
+        % normalize to the highest possible value from anechoic 
+        % conditions in each band
+        itdload  = load('ITD2Azimuth_Subband.mat');
+        itdmax   = max(abs(itdload.mapping.itd2azim),[],1);
+        itd = itd.*repmat(itdmax.^-1,[size(itd,1),1]);
+        ildload  = load('ILD2Azimuth_Subband.mat');
+        ildmax   = max(abs(ildload.mapping.ild2azim),[],1);
+        ild = ild.*repmat(ildmax.^-1,[size(ild,1),1]);
+        
+    case 'mapping'  %Map boarders (percentiles/std) of ITDs and ILDs to azimuthal angle
+        % init
+        Nframes = size(itd(:,1),1);
+        itd_mapped = zeros(Nframes,Nchan);
+        ild_mapped = zeros(Nframes,Nchan);
+        % angleoffset = -91; %offset to find the correct angle [degree]
+        itdload = load('ITD2Azimuth_Subband.matdau');
+        itd2azim = itdload.mapping.itd2azim;
+        ildload = load('ILD2Azimuth_Subband.mat');
+        ild2azim = ildload.mapping.ild2azim;
+        
+        for ii = 1:Nchan %all channels
+            % itd mapping
+            azimuth = -90:90;
+            itd_mapped(:,ii) = interp1(itd2azim(:,ii),azimuth,itd(:,ii),'nearest','extrap');
+            
+            % ild mapping
+            ild_mapped(:,ii) = interp1(ild2azim(:,ii),azimuth,ild(:,ii),'nearest','extrap');
+        end
+        
+        % Overwrite channel representation per cue with results from
+        % mapping
+        itd = itd_mapped;
+        ild = ild_mapped;
+
+otherwise
+    error(['The transformation method ' transMethod ' is not defined!'])
+    
+end
 
 % Width per channel
 [itdWidthChan, itdLR_boarderChan, itdPrctChan] = calcDistrWidth(itd,wdMethod,percent); %calculate width of binCue directly for each frequency channel
@@ -130,59 +183,6 @@ switch chanRepresent
         end  
     otherwise
         error(['The channel representation method ' chanRepresent ' is not defined!'])
-end
-
-% Transformation of bin. cue
-switch transMethod
-    case 'none' %no transformation
-        %do nothing
-        
-    case 'norm' %normalization
-        itdReprChan = itdReprChan/itdnormmax;
-        ildReprChan = ildReprChan/ildnormmax;
-        
-    case 'freqnorm'
-        % normalize to the highest possible value from anechoic 
-        % conditions in each band
-        itdload  = load('ITD2Azimuth_Subband.mat');
-        itdmax   = max(abs(itdload.mapping.itd2azim),[],1);
-        itdReprChan = itdReprChan.*repmat(itdmax.^-1,[size(itdReprChan,1),1]);
-        ildload  = load('ILD2Azimuth_Subband.mat');
-        ildmax   = max(abs(ildload.mapping.ild2azim),[],1);
-        ildReprChan = ildReprChan.*repmat(ildmax.^-1,[size(itdReprChan,1),1]);
-        
-    case 'latcomp' %lateral compression
-        itdReprChan = latCompression(itdReprChan,itdnormmax);
-        ildReprChan = latCompression(ildReprChan,ildnormmax);
-        
-    case 'mapping'  %Map boarders (percentiles/std) of ITDs and ILDs to azimuthal angle
-        % init
-        Nbounds = size(itdReprChan(:,1),1);
-        itd_mapped = zeros(Nbounds,Nchan);
-        ild_mapped = zeros(Nbounds,Nchan);
-        % angleoffset = -91; %offset to find the correct angle [degree]
-        itdload = load('ITD2Azimuth_Subband.matdau');
-        itd2azim = itdload.mapping.itd2azim;
-        ildload = load('ILD2Azimuth_Subband.mat');
-        ild2azim = ildload.mapping.ild2azim;
-        
-        for ii = 1:Nchan %all channels
-            % itd mapping
-            azimuth = -90:90;
-            itd_mapped(:,ii) = interp1(itd2azim(:,ii),azimuth,itdReprChan(:,ii),'nearest','extrap');
-            
-            % ild mapping
-            ild_mapped(:,ii) = interp1(ild2azim(:,ii),azimuth,ildReprChan(:,ii),'nearest','extrap');
-        end
-        
-        % Overwrite channel representation per cue with results from
-        % mapping
-        itdReprChan = itd_mapped;
-        ildReprChan = ild_mapped;
-
-otherwise
-    error(['The transformation method ' transMethod ' is not defined!'])
-    
 end
 
 % Frequency weighting
