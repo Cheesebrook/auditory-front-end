@@ -57,7 +57,7 @@ end
 if isfield(opt,'itdmax')
     itdnormmax = opt.itdmax;
 else
-    itdnormmax = 1e-3;
+    itdnormmax = 1.1e-3;
 end
 if isfield(opt,'ildmax')
     ildnormmax = opt.ildnormmax;
@@ -357,6 +357,7 @@ switch combMethod
         
         % average all channels
         asw = nanmean(aswReprChan,2);
+        
     case 'perimeter2' % choose the outer bands, as done by Ahrens
         if strcmp(transMethod,'none')
             warning('Bin. cues need to be transformed before they can be combined!')
